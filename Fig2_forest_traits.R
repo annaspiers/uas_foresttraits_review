@@ -30,6 +30,21 @@ shift_trans = function(d = 0) {
   scales::trans_new("shift", transform = function(x) x - d, inverse = function(x) x + d)
 }
 
+# For use in Fig 2
+# source: https://stackoverflow.com/questions/65109960/is-there-a-way-i-can-add-log-gridlines-to-my-graph-with-rstudio
+minor_breaks_log <- function(base) {
+    # Prevents lazy evaluation
+    force(base) 
+    # Wrap calculation in a function that the outer function returns
+    function(limits) {
+        ggplot2:::calc_logticks(
+            base = base, 
+            minpow = floor(log(limits[1], base = base)), 
+            maxpow = ceiling(log(limits[2], base = base))
+        )$value
+    }
+}
+
 
 # Load data
 rawdat <- data.frame(readr::read_csv("Fig2_prep.csv"))
@@ -41,7 +56,7 @@ head(rawdat)
 # Clean data
 dat <- rawdat %>%
   filter(Forest.ecology...Y.N == "Y") %>%
-  select(trait_category, trait, year_wo_RS = Year.of.earliest.publication.w.o..remote.sens.., 
+  select(trait_category, trait=trait_clean, year_wo_RS = Year.of.earliest.publication.w.o..remote.sens.., 
          count_wo_RS = Count.of.references.w.o..remote.sens.., 
          year_w_RS = Year.of.earliest.publication.w...remote.sens.., 
          count_w_RS = Count.of.references.w...remote.sens..) %>%
@@ -50,6 +65,7 @@ dat <- rawdat %>%
   #mutate(trait=replace(trait, trait == "land cover classification", "land cover")) %>%
   #mutate(trait=replace(trait, trait == "above ground biomass", "AGB")) %>%
   #mutate(trait=replace(trait, trait == "diameter at breast height (DBH)", "DBH")) 
+head(dat)
 
 #Subset data
 count.m <- dat %>% 
@@ -93,7 +109,7 @@ traitcat_col_count <- rev(ifelse(count.m_w_rs$trait_category ==
 gg1 <- ggplot(year.m, aes(x=reorder(trait, -ascend), y=value, fill=variable)) +
   geom_bar(position = "dodge", stat="identity") +
   labs(x = "Forest trait", y = "Years of Publication") + 
-  scale_y_continuous(trans = shift_trans(2022), breaks=seq(1970,2022,10)) + 
+  scale_y_continuous(trans = shift_trans(2024), breaks=seq(1970,2024,10)) + 
   scale_fill_manual(values=c("navy","skyblue3")) +
   coord_flip() +
   facet_grid(trait_category ~ ., space="free", scales="free", switch="x") +
@@ -109,8 +125,9 @@ gg2 <- ggplot(count.m, aes(x = reorder(trait,value), y=value, fill=variable)) +
   geom_bar(position="dodge", stat="identity") +
   labs(x = NULL, y = "Number of Articles (log scale)") +
   scale_y_continuous(trans = mylog_trans(base=10, from=-1), 
-                     breaks=c(1,100,10000)) +
+                     breaks=c(1,10,100,1000,10000)) +
   scale_x_discrete(position="top") +
+    scale_y_log10(minor_breaks = minor_breaks_log(10)) +
   scale_fill_manual(values=c("navy","skyblue3")) +
   coord_flip() +
   facet_grid(trait_category ~ ., space="free", scales="free", switch="x") +
@@ -128,11 +145,10 @@ gg0 <- ggplot(year.m, aes(x=reorder(trait, -ascend), y=value)) +
 gg_legend <- g_legend(gg0)
 
 # Graphs in one - final Figure 2
-grid.arrange(gg1, gg2, gg_legend, layout_matrix= rbind( c(1,1,1,1,2,2,2,3), 
+grid_final <- grid.arrange(gg1, gg2, gg_legend, layout_matrix= rbind( c(1,1,1,1,2,2,2,3), 
                                                         c(1,1,1,1,2,2,2,3), 
                                                         c(1,1,1,1,2,2,2,3)))
-
-
+ggsave(file="fig2.png", grid_final, width=10.5, height = 6.5)
 
 ### Summary stats
 
@@ -143,17 +159,17 @@ print(paste0(c("Average publications with UAS terms only:",mean(count_UAS$value,
 # What is the average count of papers published for UAS + RS terms?
 print(paste0(c("Average publications with RS terms only:",mean(count_UASRS$value, na.rm=TRUE))))
 
-# What is the most recent trait to enter theliterature?
+# What is the most recent trait to enter the literature?
 year_UAS <- year.m %>% filter(variable == "year_wo_RS")
 year_RS <- year.m %>% filter(variable == "year_w_RS")
 print(paste0(c("Average publications with UAS terms only:",max(year_UAS$value, na.rm=TRUE))))
 # What is the average count of papers published for UAS + RS terms?
 print(paste0(c("Average publications with RS terms only:",max(year_RS$value, na.rm=TRUE))))
 
-# What is the average earliest year that papers have been published for each search?
-print(paste0(c("Average publications with UAS terms only:",mean(year_UAS$value, na.rm=TRUE))))
-# What is the average count of papers published for UAS + RS terms?
-print(paste0(c("Average publications with UAS+RS terms:",mean(year_RS$value, na.rm=TRUE))))
+# # What is the average earliest year that papers have been published for each search?
+# print(paste0(c("Average publications with UAS terms only:",mean(year_UAS$value, na.rm=TRUE))))
+# # What is the average count of papers published for UAS + RS terms?
+# print(paste0(c("Average publications with UAS+RS terms:",mean(year_RS$value, na.rm=TRUE))))
 
 # What is the average rate of publication since the first year of publication for each trait for each search?
 
@@ -162,16 +178,42 @@ print(paste0(c("Average publications with UAS+RS terms:",mean(year_RS$value, na.
 #check by doing one out by hand
 if (identical(year.m$trait,count.m$trait)) {
   rate_df <- year.m %>% 
-  mutate(years_since_2022 = 2022-value) %>%
-  mutate(publ_rate = count.m$value/years_since_2022)
+  mutate(years_since_2024 = 2024-value) %>%
+  mutate(publ_rate = count.m$value/years_since_2024)
 } else {
   print("Trait columns in year.m and count.m do not match")
 }
-rate_UAS <- rate_df %>% filter(variable == "year_wo_RS")
+rate_UAS <- rate_df %>% filter(variable == "year_wo_RS") 
 rate_UASRS <- rate_df %>% filter(variable == "year_w_RS")
 print(paste0(c("Average publications with UAS terms only:",mean(rate_UAS$publ_rate, na.rm=TRUE))))
+print(paste0(c("Average publications with UAS terms only pre-2020:",mean(rate_UAS$publ_rate, na.rm=TRUE))))
+print(paste0(c("Average publications with UAS terms only 2020-2023:",mean(rate_UAS$publ_rate, na.rm=TRUE))))
 # What is the average count of papers published for UAS + RS terms?
-print(paste0(c("Average publications with UAS+RS terms:",mean(rate_UASRS$publ_rate, na.rm=TRUE))))
+print(paste0(c("Average publications with RS terms:",mean(rate_UASRS$publ_rate, na.rm=TRUE))))
 
-# Number of traits in each trait category
+# Earliest and most recent traits
+# UAS
+year.m %>% filter(variable=="year_wo_RS") %>% arrange(value) %>% head()
+year.m %>% filter(variable=="year_wo_RS") %>% arrange(value) %>% tail()
+# RS
+year.m %>% filter(variable=="year_w_RS") %>% arrange(value) %>% head()
+year.m %>% filter(variable=="year_w_RS") %>% arrange(value) %>% tail()
 
+# Publication count
+# UAS
+count.m %>% filter(variable=="count_UAS") %>% arrange(desc(value)) %>% head()
+count.m %>% filter(variable=="count_UAS") %>% arrange(value) %>% head()
+# RS
+count.m %>% filter(variable=="count_RS") %>% arrange(desc(value)) %>% head()
+count.m %>% filter(variable=="count_RS") %>% arrange(value) %>% head()
+
+# Table 2. Select one trait randomly from each catgetory that has between 
+# 10 and 100 papers published
+count.m %>% filter(variable=="count_UAS") %>% filter(value >=10 &
+                                                               value <= 100)
+# biochemical: foliar potassium - 10
+# biodiversity: species richness - 23
+# morphological: (random w number generator) land cover type - 82
+# phenological: senescence - 19
+# physiological: (random w number generator) NDVI - 44
+# population: stem density - 52
