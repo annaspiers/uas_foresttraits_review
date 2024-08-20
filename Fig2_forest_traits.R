@@ -60,7 +60,8 @@ dat <- rawdat %>%
          count_wo_RS = Count.of.references.w.o..remote.sens.., 
          year_w_RS = Year.of.earliest.publication.w...remote.sens.., 
          count_w_RS = Count.of.references.w...remote.sens..) %>%
-  mutate_at(c("year_wo_RS", "count_wo_RS", "year_w_RS", "count_w_RS"), as.numeric)# %>%
+  mutate_at(c("year_wo_RS", "count_wo_RS", "year_w_RS", "count_w_RS"), as.numeric) #%>%
+   # mutate(trait=ifelse(trait=="carbon stock","AGC",trait))
   #mutate(trait=replace(trait, trait == "canopy/tree height (1/2)", "canopy height")) %>%
   #mutate(trait=replace(trait, trait == "land cover classification", "land cover")) %>%
   #mutate(trait=replace(trait, trait == "above ground biomass", "AGB")) %>%
@@ -86,6 +87,7 @@ year.m <- dat %>%
 
 # Create column to help plot first RS then UAS+RS
 year.m$ascend = ifelse(year.m$variable == "year_w_RS", year.m$value, 0)
+#year.m$count_value = 
 
 # Add colors according to trait category
 count.m_w_rs <- count.m %>% 
@@ -104,11 +106,11 @@ traitcat_col_count <- rev(ifelse(count.m_w_rs$trait_category ==
         "Physiological","antiquewhite4","darkviolet"))))))
 
 
-# Plot 1: year
 # Figure 2: year
-gg1 <- ggplot(year.m, aes(x=reorder(trait, -ascend), y=value, fill=variable)) +
+gg1 <- ggplot(year.m, aes(x=reorder(trait,count.m$value), y=value, fill=variable)) +
+    # gg1 <- ggplot(year.m, aes(x=reorder(trait, -ascend), y=value, fill=variable)) +
   geom_bar(position = "dodge", stat="identity") +
-  labs(x = "Forest trait", y = "Years of Publication") + 
+  labs(x = "Forest trait or characteristic", y = "Year of Publication") + 
   scale_y_continuous(trans = shift_trans(2024), breaks=seq(1970,2024,10)) + 
   scale_fill_manual(values=c("navy","skyblue3")) +
   coord_flip() +
@@ -122,18 +124,18 @@ gg1 <- ggplot(year.m, aes(x=reorder(trait, -ascend), y=value, fill=variable)) +
 
 # Figure 2: count
 gg2 <- ggplot(count.m, aes(x = reorder(trait,value), y=value, fill=variable)) +
-  geom_bar(position="dodge", stat="identity") +
-  labs(x = NULL, y = "Number of Articles (log scale)") +
-  scale_y_continuous(trans = mylog_trans(base=10, from=-1), 
-                     breaks=c(1,10,100,1000,10000)) +
-  scale_x_discrete(position="top") +
+    geom_bar(position="dodge", stat="identity") +
+    labs(x = NULL, y = "Number of Articles (log scale)") +
+    scale_y_continuous(trans = mylog_trans(base=10, from=-1), 
+                       breaks=c(1,10,100,1000,10000)) +
+    scale_x_discrete(position="top") +
     scale_y_log10(minor_breaks = minor_breaks_log(10)) +
-  scale_fill_manual(values=c("navy","skyblue3")) +
-  coord_flip() +
-  facet_grid(trait_category ~ ., space="free", scales="free", switch="x") +
-  theme_minimal() +
-  theme(legend.position = "none", 
-        strip.text.y = element_blank()) 
+    scale_fill_manual(values=c("navy","skyblue3")) +
+    coord_flip() +
+    facet_grid(trait_category ~ ., space="free", scales="free", switch="x") +
+    theme_minimal() +
+    theme(legend.position = "none", 
+          strip.text.y = element_blank()) 
 
 # Legend
 gg0 <- ggplot(year.m, aes(x=reorder(trait, -ascend), y=value)) +
@@ -148,6 +150,7 @@ gg_legend <- g_legend(gg0)
 grid_final <- grid.arrange(gg1, gg2, gg_legend, layout_matrix= rbind( c(1,1,1,1,2,2,2,3), 
                                                         c(1,1,1,1,2,2,2,3), 
                                                         c(1,1,1,1,2,2,2,3)))
+ggsave(file="fig2.pdf", grid_final, width=10.5, height = 6.5)
 ggsave(file="fig2.png", grid_final, width=10.5, height = 6.5)
 
 ### Summary stats
@@ -160,11 +163,10 @@ print(paste0(c("Average publications with UAS terms only:",mean(count_UAS$value,
 print(paste0(c("Average publications with RS terms only:",mean(count_UASRS$value, na.rm=TRUE))))
 
 # What is the most recent trait to enter the literature?
-year_UAS <- year.m %>% filter(variable == "year_wo_RS")
-year_RS <- year.m %>% filter(variable == "year_w_RS")
-print(paste0(c("Average publications with UAS terms only:",max(year_UAS$value, na.rm=TRUE))))
-# What is the average count of papers published for UAS + RS terms?
-print(paste0(c("Average publications with RS terms only:",max(year_RS$value, na.rm=TRUE))))
+year_UAS <- year.m %>% filter(variable == "year_wo_RS") %>% arrange(desc(value))
+year_RS <- year.m %>% filter(variable == "year_w_RS") %>% arrange(desc(value))
+paste0("Most recently published UAS trait:",year_UAS[1,])
+paste0("Most recently published RS trait:",year_RS[1,])
 
 # # What is the average earliest year that papers have been published for each search?
 # print(paste0(c("Average publications with UAS terms only:",mean(year_UAS$value, na.rm=TRUE))))
@@ -178,7 +180,7 @@ print(paste0(c("Average publications with RS terms only:",max(year_RS$value, na.
 #check by doing one out by hand
 if (identical(year.m$trait,count.m$trait)) {
   rate_df <- year.m %>% 
-  mutate(years_since_2024 = 2024-value) %>%
+  mutate(years_since_2024 = 2025-value) %>%
   mutate(publ_rate = count.m$value/years_since_2024)
 } else {
   print("Trait columns in year.m and count.m do not match")
@@ -186,18 +188,18 @@ if (identical(year.m$trait,count.m$trait)) {
 rate_UAS <- rate_df %>% filter(variable == "year_wo_RS") 
 rate_UASRS <- rate_df %>% filter(variable == "year_w_RS")
 print(paste0(c("Average publications with UAS terms only:",mean(rate_UAS$publ_rate, na.rm=TRUE))))
-print(paste0(c("Average publications with UAS terms only pre-2020:",mean(rate_UAS$publ_rate, na.rm=TRUE))))
-print(paste0(c("Average publications with UAS terms only 2020-2023:",mean(rate_UAS$publ_rate, na.rm=TRUE))))
+#print(paste0(c("Average publications with UAS terms only pre-2020:",mean(rate_UAS$publ_rate, na.rm=TRUE))))
+#print(paste0(c("Average publications with UAS terms only 2020-2023:",mean(rate_UAS$publ_rate, na.rm=TRUE))))
 # What is the average count of papers published for UAS + RS terms?
 print(paste0(c("Average publications with RS terms:",mean(rate_UASRS$publ_rate, na.rm=TRUE))))
 
 # Earliest and most recent traits
 # UAS
-year.m %>% filter(variable=="year_wo_RS") %>% arrange(value) %>% head()
-year.m %>% filter(variable=="year_wo_RS") %>% arrange(value) %>% tail()
+year.m %>% filter(variable=="year_wo_RS") %>% arrange(value) %>% head(4) #earlist
+year.m %>% filter(variable=="year_wo_RS") %>% arrange(value) %>% tail(4) #most recent
 # RS
-year.m %>% filter(variable=="year_w_RS") %>% arrange(value) %>% head()
-year.m %>% filter(variable=="year_w_RS") %>% arrange(value) %>% tail()
+year.m %>% filter(variable=="year_w_RS") %>% arrange(value) %>% head(4) #earlist
+year.m %>% filter(variable=="year_w_RS") %>% arrange(value) %>% tail(4) #most recent
 
 # Publication count
 # UAS
